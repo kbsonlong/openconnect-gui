@@ -65,17 +65,17 @@ jobs:
 
       - name: Install (bundle deps via CMake)
         run: |
-          cmake --install build --prefix install_dir
+          cmake --install build --prefix "${{ github.workspace }}/install_dir"
 
       # 使用 CMake 的 fixup_bundle 已在安装步骤执行，无需 macdeployqt
 
       - name: Sign App
         run: |
-          codesign --deep --force -s - install_dir/OpenConnect-GUI.app
+          codesign --deep --force -s - "${{ github.workspace }}/install_dir/OpenConnect-GUI.app"
 
       - name: Package app as zip
         run: |
-          ditto -c -k --sequesterRsrc --keepParent install_dir/OpenConnect-GUI.app openconnect-gui-macos-${{ env.VERSION }}.zip
+          ditto -c -k --sequesterRsrc --keepParent "${{ github.workspace }}/install_dir/OpenConnect-GUI.app" openconnect-gui-macos-${{ env.VERSION }}.zip
 
       - name: Create GitHub Release and upload asset
         uses: softprops/action-gh-release@v1
