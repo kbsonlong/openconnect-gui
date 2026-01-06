@@ -79,6 +79,11 @@ add_executable(${PROJECT_NAME}
     ${${PROJECT_NAME}_RESOURCES}
 )
 
+# Ensure qt-solutions headers are generated before compiling main sources
+if(TARGET qt-solutions-${qt-solutions-TAG})
+    add_dependencies(${PROJECT_NAME} qt-solutions-${qt-solutions-TAG})
+endif()
+
 if(MINGW)
     add_definitions(-DSPDLOG_WCHAR_FILENAMES)
 
@@ -190,6 +195,15 @@ install(TARGETS ${PROJECT_NAME}
 # fixup the bundle
 get_target_property(QT_LIBRARY_DIR Qt6::Core LOCATION)
 get_filename_component(QT_LIBRARY_DIR ${QT_LIBRARY_DIR} PATH)
+if(APPLE)
+    # On macOS, we need the path containing the frameworks (e.g. /lib), not the framework content path
+    # Go up from .../QtCore.framework/Versions/A/QtCore -> .../QtCore.framework/Versions/A -> .../Versions -> .../QtCore.framework -> .../lib
+    get_filename_component(QT_LIBRARY_DIR ${QT_LIBRARY_DIR} PATH)
+    get_filename_component(QT_LIBRARY_DIR ${QT_LIBRARY_DIR} PATH)
+    get_filename_component(QT_LIBRARY_DIR ${QT_LIBRARY_DIR} PATH)
+    # Add Homebrew standard lib path for dependencies like brotli
+    list(APPEND libSearchDirs "/opt/homebrew/lib")
+endif()
 list(APPEND libSearchDirs ${QT_LIBRARY_DIR})
 
 if(MINGW)
@@ -223,30 +237,37 @@ if(MINGW)
         )
     endif()
 elseif(APPLE)
-    set(APPS "\${CMAKE_INSTALL_PREFIX}/${PROJECT_NAME}.app")
+    set(APPS "\${CMAKE_INSTALL_PREFIX}/${PRODUCT_NAME_SHORT}.app")
     list(APPEND libSearchDirs "")
 
     # Qt Platform Plugin
     install(FILES
         ${_qcocoa_dylib}
-        DESTINATION ${PROJECT_NAME}.app/Contents/PlugIns/platforms
+        DESTINATION ${PRODUCT_NAME_SHORT}.app/Contents/PlugIns/platforms
         COMPONENT App
     )
-    set(additionalLib \${CMAKE_INSTALL_PREFIX}/${PROJECT_NAME}.app/Contents/PlugIns/platforms/libqcocoa.dylib)
+    set(additionalLib \${CMAKE_INSTALL_PREFIX}/${PRODUCT_NAME_SHORT}.app/Contents/PlugIns/platforms/libqcocoa.dylib)
     if(Qt6Core_VERSION VERSION_GREATER_EQUAL "6.0")
         install(FILES
             ${_qmacstyle_dylib}
-            DESTINATION ${PROJECT_NAME}.app/Contents/PlugIns/styles
+            DESTINATION ${PRODUCT_NAME_SHORT}.app/Contents/PlugIns/styles
             COMPONENT App
         )
         set(additionalLib
             ${additionalLib}
-            \${CMAKE_INSTALL_PREFIX}/${PROJECT_NAME}.app/Contents/PlugIns/styles/libqmacstyle.dylib
+            \${CMAKE_INSTALL_PREFIX}/${PRODUCT_NAME_SHORT}.app/Contents/PlugIns/styles/libqmacstyle.dylib
         )
     endif()
+
+    # Explicitly add QtDBus to fixup_bundle list to ensure it's copied
+    get_target_property(QT_DBUS_LIB Qt6::DBus LOCATION)
+    set(additionalLib
+        ${additionalLib}
+        ${QT_DBUS_LIB}
+    )
     install(FILES
         ${CMAKE_SOURCE_DIR}/bundle/qt.conf
-        DESTINATION ${PROJECT_NAME}.app/Contents/Resources
+        DESTINATION ${PRODUCT_NAME_SHORT}.app/Contents/Resources
         COMPONENT App
     )
 else()
@@ -262,7 +283,7 @@ if(MINGW)
     )
 endif()
 
-install(CODE "
+    install(CODE "
     include(BundleUtilities)
     if(APPLE)
         set(BU_CHMOD_BUNDLE_ITEMS on)
