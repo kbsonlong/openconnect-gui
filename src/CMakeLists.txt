@@ -166,6 +166,7 @@ target_link_libraries (${PROJECT_NAME}
     Qt6::Widgets
     Qt6::Network
     Qt6::StateMachine
+    Qt6::DBus
 )
 
 if(UNIX)

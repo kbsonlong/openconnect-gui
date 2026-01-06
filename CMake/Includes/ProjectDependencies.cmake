@@ -3,7 +3,7 @@ set(CMAKE_AUTOMOC ON)
 set(CMAKE_AUTOUIC ON)
 set(CMAKE_AUTORCC ON)
 
-find_package(Qt6 6.0 REQUIRED COMPONENTS Core Gui Widgets Network StateMachine)
+find_package(Qt6 6.0 REQUIRED COMPONENTS Core Gui Widgets Network StateMachine DBus)
 if(MINGW)
     get_target_property(_qwindows_dll Qt6::QWindowsIntegrationPlugin LOCATION)
     if(Qt6Core_VERSION VERSION_GREATER_EQUAL "6.7")
