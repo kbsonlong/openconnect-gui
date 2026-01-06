@@ -1,0 +1,86 @@
+name: macos-build
+
+on:
+  push:
+    tags:
+      - '*'
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: 'Tag to build (e.g., v1.0.0)'
+        required: true
+        type: string
+
+jobs:
+  build-macos:
+    runs-on: macos-14
+    permissions:
+      contents: write
+    env:
+      HOMEBREW_NO_AUTO_UPDATE: 1
+      HOMEBREW_NO_INSTALL_UPGRADE: 1
+      HOMEBREW_NO_INSTALL_CLEANUP: 1
+      HOMEBREW_NO_INSTALLED_DEPENDENTS_CHECK: 1
+      BUILD_TYPE: Release
+    steps:
+      - name: Checkout (dispatch)
+        if: ${{ github.event_name == 'workflow_dispatch' }}
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.tag }}
+          fetch-depth: 0
+
+      - name: Checkout (push)
+        if: ${{ github.event_name != 'workflow_dispatch' }}
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Set version
+        run: |
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            echo "VERSION=${{ inputs.tag }}" >> $GITHUB_ENV
+          else
+            echo "VERSION=${GITHUB_REF_NAME}" >> $GITHUB_ENV
+          fi
+
+      - name: Install dependencies
+        run: |
+          brew install cmake pkg-config qt@6 openconnect
+
+      - name: Configure
+        run: |
+          QT_PREFIX=$(brew --prefix qt@6 || brew --prefix qt)
+          cmake -S . -B build -DQt6_DIR="$QT_PREFIX/lib/cmake/Qt6" -DCMAKE_BUILD_TYPE="$BUILD_TYPE" -DCMAKE_OSX_DEPLOYMENT_TARGET=10.15 -DCMAKE_CXX_FLAGS="-Wno-deprecated-declarations"
+
+      - name: Build
+        run: |
+          cmake --build build --config "$BUILD_TYPE"
+
+      - name: Deploy Qt Dependencies
+        run: |
+          QT_VERSION=$(brew list qt@6 --versions | awk '{print $2}')
+          QT_BIN_DIR=$(brew --prefix qt@6)/bin
+          $QT_BIN_DIR/macdeployqt build/bin/OpenConnect-GUI.app -verbose=2
+          
+          # Fix non-standard Qt path linking
+          curl -OL https://raw.githubusercontent.com/arl/macdeployqtfix/refs/heads/master/macdeployqtfix.py
+          python3 macdeployqtfix.py build/bin/OpenConnect-GUI.app $(brew --prefix qt@6)/
+
+      - name: Sign App
+        run: |
+          codesign --deep --force -s - build/bin/OpenConnect-GUI.app
+
+      - name: Package app as zip
+        run: |
+          ditto -c -k --sequesterRsrc --keepParent build/bin/OpenConnect-GUI.app openconnect-gui-macos-${{ env.VERSION }}.zip
+
+      - name: Create GitHub Release and upload asset
+        uses: softprops/action-gh-release@v1
+        with:
+          tag_name: ${{ env.VERSION }}
+          name: openconnect-gui ${{ env.VERSION }}
+          files: |
+            openconnect-gui-macos-${{ env.VERSION }}.zip
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
