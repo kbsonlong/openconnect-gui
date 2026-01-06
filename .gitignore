@@ -9,6 +9,7 @@
 # temporary build folders
 build-release*/
 build*/
+install_dir/*
 
 
 # temporary...

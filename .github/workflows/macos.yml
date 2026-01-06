@@ -46,34 +46,36 @@ jobs:
 
       - name: Install dependencies
         run: |
-          brew install cmake pkg-config qt@6 openconnect
+          brew install cmake pkg-config qt@6 qtscxml openconnect
 
       - name: Configure
         run: |
           QT_PREFIX=$(brew --prefix qt@6 || brew --prefix qt)
-          cmake -S . -B build -DQt6_DIR="$QT_PREFIX/lib/cmake/Qt6" -DCMAKE_BUILD_TYPE="$BUILD_TYPE" -DCMAKE_OSX_DEPLOYMENT_TARGET=10.15 -DCMAKE_CXX_FLAGS="-Wno-deprecated-declarations"
+          QTSCXML_PREFIX=$(brew --prefix qtscxml)
+          cmake -S . -B build \
+            -DCMAKE_BUILD_TYPE="$BUILD_TYPE" \
+            -DCMAKE_OSX_DEPLOYMENT_TARGET=10.15 \
+            -DCMAKE_CXX_FLAGS="-Wno-deprecated-declarations" \
+            -DQt6_DIR="$QT_PREFIX/lib/cmake/Qt6" \
+            -DCMAKE_PREFIX_PATH="$QT_PREFIX;$QTSCXML_PREFIX"
 
       - name: Build
         run: |
           cmake --build build --config "$BUILD_TYPE"
 
-      - name: Deploy Qt Dependencies
+      - name: Install (bundle deps via CMake)
         run: |
-          QT_VERSION=$(brew list qt@6 --versions | awk '{print $2}')
-          QT_BIN_DIR=$(brew --prefix qt@6)/bin
-          $QT_BIN_DIR/macdeployqt build/bin/OpenConnect-GUI.app -verbose=2
-          
-          # Fix non-standard Qt path linking
-          curl -OL https://raw.githubusercontent.com/arl/macdeployqtfix/refs/heads/master/macdeployqtfix.py
-          python3 macdeployqtfix.py build/bin/OpenConnect-GUI.app $(brew --prefix qt@6)/
+          cmake --install build --prefix install_dir
+
+      # 使用 CMake 的 fixup_bundle 已在安装步骤执行，无需 macdeployqt
 
       - name: Sign App
         run: |
-          codesign --deep --force -s - build/bin/OpenConnect-GUI.app
+          codesign --deep --force -s - install_dir/OpenConnect-GUI.app
 
       - name: Package app as zip
         run: |
-          ditto -c -k --sequesterRsrc --keepParent build/bin/OpenConnect-GUI.app openconnect-gui-macos-${{ env.VERSION }}.zip
+          ditto -c -k --sequesterRsrc --keepParent install_dir/OpenConnect-GUI.app openconnect-gui-macos-${{ env.VERSION }}.zip
 
       - name: Create GitHub Release and upload asset
         uses: softprops/action-gh-release@v1
