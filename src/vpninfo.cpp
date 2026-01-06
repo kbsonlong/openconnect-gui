@@ -88,6 +88,16 @@ static int process_auth_form(void* privdata, struct oc_auth_form* form)
 
     if (form->banner) {
         Logger::instance().addMessage(QLatin1String(form->banner));
+        if (vpn->ss->get_batch_mode() != true) {
+            MyMsgBox msgBox(vpn->m,
+                QString::fromUtf8(form->banner),
+                QString::fromUtf8(form->message ? form->message : ""),
+                QString("Accept"));
+            msgBox.show();
+            if (msgBox.result() == false) {
+                return OC_FORM_RESULT_CANCELLED;
+            }
+        }
     }
 
     if (form->message) {
@@ -228,10 +238,18 @@ static int process_auth_form(void* privdata, struct oc_auth_form* form)
                 continue;
             }
 
+            QLineEdit::EchoMode echoMode = QLineEdit::Password;
+            QString optLabel = QString::fromUtf8(opt->label);
+            QString dialogTitle = QLatin1String("Password input");
+            if (optLabel.contains(QLatin1String("OTP"), Qt::CaseInsensitive)) {
+                echoMode = QLineEdit::Normal;
+                dialogTitle = QLatin1String("OTP input");
+            }
+
             MyInputDialog dialog(vpn->m,
-                QLatin1String("Password input"),
-                QString::fromUtf8(opt->label),
-                QLineEdit::Password);
+                dialogTitle,
+                optLabel,
+                echoMode);
 
             dialog.set_banner(QString::fromUtf8(form->banner), QString::fromUtf8(form->message));
             dialog.show();
